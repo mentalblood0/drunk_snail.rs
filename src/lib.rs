@@ -3,17 +3,17 @@ pub mod drunk_snail {
     use std::collections::HashMap;
 
     #[derive(Debug, PartialEq, Eq)]
-    pub struct Syntax {
-        open_tag: String,
-        close_tag: String,
-        optional_operator: String,
+    pub struct Syntax<'a> {
+        open_tag: &'a str,
+        close_tag: &'a str,
+        optional_operator: &'a str,
     }
-    impl Default for Syntax {
+    impl Default for Syntax<'_> {
         fn default() -> Self {
             Syntax {
-                open_tag: String::from("<!--"),
-                close_tag: String::from("-->"),
-                optional_operator: String::from("optional"),
+                open_tag: "<!--",
+                close_tag: "-->",
+                optional_operator: "optional",
             }
         }
     }
@@ -63,10 +63,10 @@ pub mod drunk_snail {
                 parameter_regex: {
                     let parameter_expression_regex_str = format!(
                         r"{} *(?P<optional>\({}\))?\({}\)(?P<name>\w+) *{}",
-                        regex::escape(syntax.open_tag.as_str()),
-                        regex::escape(syntax.optional_operator.as_str()),
+                        regex::escape(syntax.open_tag),
+                        regex::escape(syntax.optional_operator),
                         regex::escape(parameter_operator),
-                        regex::escape(syntax.close_tag.as_str())
+                        regex::escape(syntax.close_tag)
                     );
                     let result = Regex::new(
                         format!(r"(?P<left>.+?)?{parameter_expression_regex_str}")
@@ -79,10 +79,10 @@ pub mod drunk_snail {
                 reference_line_regex: Regex::new(
                     format!(
                         r"^(?P<left>.+)?{} *(?P<optional>\({}\))?\({}\)(?P<name>\w+) *{}(?P<right>.+)?$",
-                        regex::escape(syntax.open_tag.as_str()),
-                        regex::escape(syntax.optional_operator.as_str()),
+                        regex::escape(syntax.open_tag),
+                        regex::escape(syntax.optional_operator),
                         regex::escape(reference_operator),
-                        regex::escape(syntax.close_tag.as_str())
+                        regex::escape(syntax.close_tag)
                     )
                     .as_str(),
                 )
@@ -151,7 +151,7 @@ pub mod drunk_snail {
         Value(&'a str),
     }
     pub type TemplateParameters<'a> = HashMap<&'a str, TemplateParametersValue<'a>>;
-    pub type Templates<'a> = HashMap<String, Template<'a>>;
+    pub type Templates<'a> = HashMap<&'a str, Template<'a>>;
 
     impl Template<'_> {
         pub fn render_internal(
