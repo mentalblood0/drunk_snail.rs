@@ -15,19 +15,21 @@ fn table(bencher: divan::Bencher) {
     let templates = Templates::from([("Row", &row_template)]);
 
     const SIZE: usize = 100;
-    let mut rows: Vec<TemplateParameters> = Vec::from([]);
-    for _ in 0..SIZE {
-        rows.push(TemplateParameters::from([(
-            "cell",
-            TemplateParametersValue::ValuesVec(
-                (0..SIZE)
-                    .flat_map(|y| (0..SIZE).map(move |x| (x + y * SIZE).to_string()))
-                    .collect(),
-            ),
-        )]));
-    }
-    let parameters =
-        TemplateParameters::from([("Row", TemplateParametersValue::ParametersVec(rows))]);
+    let parameters = TemplateParameters::from([(
+        "Row",
+        TemplateParametersValue::ParametersVec(
+            (0..SIZE)
+                .map(move |y| {
+                    TemplateParameters::from([(
+                        "cell",
+                        TemplateParametersValue::ValuesVec(
+                            (0..SIZE).map(move |x| (x + y * SIZE).to_string()).collect(),
+                        ),
+                    )])
+                })
+                .collect(),
+        ),
+    )]);
 
     bencher.bench(|| table_template.render(&parameters, &templates).unwrap());
 }
