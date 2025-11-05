@@ -5,3 +5,10 @@ edition = "2024"
 
 [dependencies]
 regex = "1.12.2"
+
+[dev-dependencies]
+divan = "0.1.21"
+
+[[bench]]
+name = "main"
+harness = false
