@@ -137,7 +137,52 @@ pub enum TemplateParametersValue<'a> {
     Value(String),
 }
 pub type TemplateParameters<'a> = HashMap<&'a str, TemplateParametersValue<'a>>;
-pub type Templates<'a> = HashMap<&'a str, &'a Template<'a>>;
+pub type Templates<'a> = HashMap<&'a str, Template<'a>>;
+
+#[macro_export]
+macro_rules! tp_value {
+    ($val:expr) => {
+        TemplateParametersValue::Value($val)
+    };
+}
+
+#[macro_export]
+macro_rules! tp_values {
+    ($($val:expr),*) => {
+        TemplateParametersValue::ValuesVec(vec![$($val.to_string()),*])
+    };
+}
+
+#[macro_export]
+macro_rules! tp_params {
+    ($($key:expr => $value:expr),*) => {{
+        let mut params = HashMap::new();
+        $(params.insert($key, $value);)*
+        TemplateParametersValue::Parameters(params)
+    }};
+    () => {
+        TemplateParametersValue::Parameters(HashMap::new())
+    };
+}
+
+#[macro_export]
+macro_rules! tp_params_vec {
+    ($($params:expr),*) => {
+        TemplateParametersValue::ParametersVec(vec![$($params),*])
+    };
+}
+
+#[macro_export]
+macro_rules! params {
+    ($($key:expr => $value:expr),*) => {{
+        let mut map = HashMap::new();
+        $(map.insert($key, $value);)*
+        map
+    }};
+    () => {
+        HashMap::new()
+    };
+}
 
 impl Template<'_> {
     pub fn render_internal(
@@ -341,192 +386,87 @@ fn test_parse() {
         }
     );
 }
-#[test]
-fn test_render_param() {
-    let parser = Parser::default();
-    assert_eq!(
-        parser
-            .parse("one <!-- (param)p --> two")
-            .render(
-                &TemplateParameters::from([(
-                    "p",
-                    TemplateParametersValue::Value("lalala".to_string())
-                )]),
-                &Templates::from([]),
-            )
-            .unwrap(),
-        "one lalala two\n"
-    );
+macro_rules! test {
+    ($name:ident, $template_text:expr, $parameters:expr, $templates:expr, $correct_result:expr) => {
+        #[test]
+        fn $name() {
+            let parser = Parser::default();
+            let templates: HashMap<&str, &str> = HashMap::from($templates);
+            let mut parsed_templates = Templates::from([]);
+            for (template_name, template_text) in templates {
+                let parsed = parser.parse(template_text);
+                parsed_templates.insert(template_name, parsed);
+            }
+            assert_eq!(
+                parser
+                    .parse($template_text)
+                    .render($parameters, &parsed_templates,)
+                    .unwrap(),
+                $correct_result
+            );
+        }
+    };
 }
-#[test]
-fn test_render_multivalued_param() {
-    let parser = Parser::default();
-    assert_eq!(
-        parser
-            .parse("one <!-- (param)p --> two")
-            .render(
-                &TemplateParameters::from([(
-                    "p",
-                    TemplateParametersValue::ValuesVec(Vec::from([
-                        "v1".to_string(),
-                        "v2".to_string()
-                    ]))
-                )]),
-                &Templates::from([]),
-            )
-            .unwrap(),
-        "one v1 two\none v2 two\n"
-    );
-}
-#[test]
-fn test_render_multiple_params() {
-    let parser = Parser::default();
-    assert_eq!(
-        parser
-            .parse("one <!-- (param)p1 --> <!-- (param)p2 --> two")
-            .render(
-                &TemplateParameters::from([
-                    ("p1", TemplateParametersValue::Value("v1".to_string())),
-                    ("p2", TemplateParametersValue::Value("v2".to_string()))
-                ]),
-                &Templates::from([]),
-            )
-            .unwrap(),
-        "one v1 v2 two\n"
-    );
-}
-#[test]
-fn test_render_optional_param() {
-    let parser = Parser::default();
-    assert_eq!(
-        parser
-            .parse("one <!-- (optional)(param)p --> two")
-            .render(&TemplateParameters::from([]), &Templates::from([]))
-            .unwrap(),
-        "one  two\n"
-    );
-}
-#[test]
-fn test_render_optional_param_while_there_is_also_param_with_more_than_one_value() {
-    let parser = Parser::default();
-    assert_eq!(
-        parser
-            .parse("left <!-- (param)p1 --> middle <!-- (optional)(param)p2 --> right\nplain text")
-            .render(
-                &TemplateParameters::from([
-                    (
-                        "p1",
-                        TemplateParametersValue::ValuesVec(Vec::from([
-                            "lalala".to_string(),
-                            "lululu".to_string()
-                        ]))
-                    ),
-                    ("p2", TemplateParametersValue::Value("lololo".to_string()))
-                ]),
-                &Templates::from([]),
-            )
-            .unwrap(),
-        "left lalala middle lololo right\nleft lululu middle  right\nplain text\n"
-    );
-}
-#[test]
-fn test_render_ref() {
-    let parser = Parser::default();
-    assert_eq!(
-        parser
-            .parse("one <!-- (ref)r --> two")
-            .render(
-                &TemplateParameters::from([(
-                    "r",
-                    TemplateParametersValue::Parameters(TemplateParameters::from([(
-                        "p",
-                        TemplateParametersValue::Value("v".to_string())
-                    )]))
-                ),]),
-                &Templates::from([("r", &parser.parse("three"))]),
-            )
-            .unwrap(),
-        "one three two\n"
-    );
-}
-#[test]
-fn test_render_2x2_html_table() {
-    let parser = Parser::default();
-    assert_eq!(
-        parser
-            .parse("<table>\n    <!-- (ref)Row -->\n</table>")
-            .render(
-                &TemplateParameters::from([(
-                    "Row",
-                    TemplateParametersValue::ParametersVec(Vec::from([
-                        TemplateParameters::from([(
-                            "cell",
-                            TemplateParametersValue::ValuesVec(Vec::from([
-                                "1.1".to_string(),
-                                "2.1".to_string()
-                            ]))
-                        )]),
-                        TemplateParameters::from([(
-                            "cell",
-                            TemplateParametersValue::ValuesVec(Vec::from([
-                                "1.2".to_string(),
-                                "2.2".to_string()
-                            ]))
-                        )])
-                    ]))
-                ),]),
-                &Templates::from([(
-                    "Row",
-                    &parser.parse("<tr>\n    <td><!-- (param)cell --></td>\n</tr>")
-                )]),
-            )
-            .unwrap(),
-        "<table>\n    <tr>\n        <td>1.1</td>\n        <td>2.1</td>\n    </tr>\n    <tr>\n        <td>1.2</td>\n        <td>2.2</td>\n    </tr>\n</table>\n"
-    );
-}
-#[test]
-fn test_render_ref_with_param() {
-    let parser = Parser::default();
-    assert_eq!(
-        parser
-            .parse("one <!-- (ref)r --> two")
-            .render(
-                &TemplateParameters::from([(
-                    "r",
-                    TemplateParametersValue::Parameters(TemplateParameters::from([(
-                        "p",
-                        TemplateParametersValue::Value("three".to_string())
-                    )]))
-                ),]),
-                &Templates::from([("r", &parser.parse("<!-- (param)p -->"))]),
-            )
-            .unwrap(),
-        "one three two\n"
-    );
-}
-#[test]
-fn test_render_multivalued_ref_with_param() {
-    let parser = Parser::default();
-    assert_eq!(
-        parser
-            .parse("one <!-- (ref)r --> two")
-            .render(
-                &TemplateParameters::from([(
-                    "r",
-                    TemplateParametersValue::ParametersVec(Vec::from([
-                        TemplateParameters::from([(
-                            "p",
-                            TemplateParametersValue::Value("three".to_string())
-                        )]),
-                        TemplateParameters::from([(
-                            "p",
-                            TemplateParametersValue::Value("four".to_string())
-                        )])
-                    ]))
-                ),]),
-                &Templates::from([("r", &parser.parse("<!-- (param)p -->"))]),
-            )
-            .unwrap(),
-        "one three two\none four two\n"
-    );
-}
+test!(
+    render_param,
+    "one <!-- (param)p --> two",
+    &params! {"p" => tp_value!("lalala".to_string())},
+    [],
+    "one lalala two\n"
+);
+test!(
+    render_multivalued_param,
+    "one <!-- (param)p --> two",
+    &params! {"p" => tp_values! ["v1", "v2"]},
+    [],
+    "one v1 two\none v2 two\n"
+);
+test!(
+    render_multiple_params,
+    "one <!-- (param)p1 --> <!-- (param)p2 --> two",
+    &params! {"p1" => tp_value!("v1".to_string()), "p2" => tp_value!("v2".to_string())},
+    [],
+    "one v1 v2 two\n"
+);
+test!(
+    render_optional_param,
+    "one <!-- (optional)(param)p --> two",
+    &TemplateParameters::from([]),
+    [],
+    "one  two\n"
+);
+test!(
+    render_optional_param_while_there_is_also_param_with_more_than_one_value,
+    "left <!-- (param)p1 --> middle <!-- (optional)(param)p2 --> right\nplain text",
+    &params! {"p1" => tp_values!("lalala", "lululu"), "p2" => tp_value!("lololo".to_string())},
+    [],
+    "left lalala middle lololo right\nleft lululu middle  right\nplain text\n"
+);
+test!(
+    render_ref,
+    "one <!-- (ref)r --> two",
+    &params! {"r" => tp_params! {"p" => tp_value!("v".to_string())}},
+    [("r", "three")],
+    "one three two\n"
+);
+test!(
+    render_2x2_html_table,
+    "<table>\n    <!-- (ref)Row -->\n</table>",
+    &params! {"Row" => tp_params_vec!(params! {"cell" => tp_values!("1.1", "2.1")}, params! {"cell" => tp_values!("1.2", "2.2")})},
+    [("Row", "<tr>\n    <td><!-- (param)cell --></td>\n</tr>")],
+    "<table>\n    <tr>\n        <td>1.1</td>\n        <td>2.1</td>\n    </tr>\n    <tr>\n        <td>1.2</td>\n        <td>2.2</td>\n    </tr>\n</table>\n"
+);
+test!(
+    render_ref_with_param,
+    "one <!-- (ref)r --> two",
+    &params! {"r" => tp_params! {"p" => tp_value!("three".to_string())}},
+    [("r", "<!-- (param)p -->")],
+    "one three two\n"
+);
+test!(
+    render_multivalued_ref_with_param,
+    "one <!-- (ref)r --> two",
+    &params! {"r" => tp_params_vec!(params! {"p" => tp_value!("three".to_string())}, params! {"p" => tp_value!("four".to_string())})},
+    [("r", "<!-- (param)p -->")],
+    "one three two\none four two\n"
+);

@@ -12,7 +12,7 @@ fn table(bencher: divan::Bencher, size: usize) {
 
     let table_template = parser.parse("<table>\n    <!-- (ref)Row -->\n</table>");
     let row_template = parser.parse("<tr>\n    <td><!-- (param)cell --></td>\n</tr>");
-    let templates = Templates::from([("Row", &row_template)]);
+    let templates = Templates::from([("Row", row_template)]);
 
     let parameters = TemplateParameters::from([(
         "Row",
