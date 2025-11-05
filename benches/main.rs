@@ -6,24 +6,23 @@ fn main() {
     divan::main();
 }
 
-#[divan::bench]
-fn table(bencher: divan::Bencher) {
+#[divan::bench(args=[10, 100, 1000])]
+fn table(bencher: divan::Bencher, size: usize) {
     let parser = drunk_snail::Parser::default();
 
     let table_template = parser.parse("<table>\n    <!-- (ref)Row -->\n</table>");
     let row_template = parser.parse("<tr>\n    <td><!-- (param)cell --></td>\n</tr>");
     let templates = Templates::from([("Row", &row_template)]);
 
-    const SIZE: usize = 100;
     let parameters = TemplateParameters::from([(
         "Row",
         TemplateParametersValue::ParametersVec(
-            (0..SIZE)
+            (0..size)
                 .map(move |y| {
                     TemplateParameters::from([(
                         "cell",
                         TemplateParametersValue::ValuesVec(
-                            (0..SIZE).map(move |x| (x + y * SIZE).to_string()).collect(),
+                            (0..size).map(move |x| (x + y * size).to_string()).collect(),
                         ),
                     )])
                 })
