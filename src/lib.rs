@@ -47,18 +47,13 @@ pub struct Parser {
     parameter_regex: Regex,
     reference_line_regex: Regex,
 }
-impl Default for Parser {
-    fn default() -> Self {
-        Parser::from_syntax(&Syntax::default(), "param", "ref")
-    }
-}
 impl Parser {
     pub fn from_syntax(
         syntax: &Syntax,
         parameter_operator: &str,
         reference_operator: &str,
-    ) -> Self {
-        Parser {
+    ) -> Result<Self, String> {
+        Ok(Parser {
                 parameter_regex: Regex::new(
                     format!(r"(?P<left>.+?)?{} *(?P<optional>\({}\))?\({}\)(?P<name>\w+) *{}",
                         regex::escape(syntax.open_tag),
@@ -66,7 +61,7 @@ impl Parser {
                         regex::escape(parameter_operator),
                         regex::escape(syntax.close_tag)
                     ).as_str(),
-                ).unwrap(),
+                ).map_err(|error| format!("Can not parse parameter regex: {error}"))?,
                 reference_line_regex: Regex::new(
                     format!(
                         r"^(?P<left>.+)?{} *(?P<optional>\({}\))?\({}\)(?P<name>\w+) *{}(?P<right>.+)?$",
@@ -75,58 +70,72 @@ impl Parser {
                         regex::escape(reference_operator),
                         regex::escape(syntax.close_tag)
                     ).as_str(),
-                ).unwrap(),
-            }
+                ).map_err(|error| format!("Can not parse reference line regex: {error}"))?,
+            })
     }
-    pub fn parse<'a>(&'a self, text: &'a str) -> Template<'a> {
-        Template {
-            lines: text
-                .lines()
-                .map(|line| {
-                    let parameters_captures: Vec<_> =
-                        self.parameter_regex.captures_iter(line).collect();
-                    if parameters_captures.len() > 0 {
-                        Line::Parameters {
-                            tokens: {
-                                let mut result: Vec<ParametersLineToken> = Vec::new();
-                                for capture in &parameters_captures {
-                                    if let Some(left) = capture.name("left") {
-                                        result.push(ParametersLineToken::Raw {
-                                            value: left.as_str(),
-                                        });
-                                    }
-                                    result.push(ParametersLineToken::Parameter {
-                                        is_optional: capture.name("optional").is_some(),
-                                        name: capture.name("name").unwrap().as_str(),
-                                    })
+    pub fn parse<'a>(&'a self, text: &'a str) -> Result<Template<'a>, String> {
+        let mut parsed_lines: Vec<Line> = Vec::new();
+        for line in text.lines() {
+            parsed_lines.push({
+                let parameters_captures: Vec<_> =
+                    self.parameter_regex.captures_iter(line).collect();
+                if parameters_captures.len() > 0 {
+                    Line::Parameters {
+                        tokens: {
+                            let mut result: Vec<ParametersLineToken> = Vec::new();
+                            for capture in &parameters_captures {
+                                if let Some(left) = capture.name("left") {
+                                    result.push(ParametersLineToken::Raw {
+                                        value: left.as_str(),
+                                    });
                                 }
-                                let right =
-                                    &line[parameters_captures.last().unwrap().get_match().end()..];
-                                result.push(ParametersLineToken::Raw { value: right });
-                                result
-                            },
-                        }
-                    } else if let Some(captures) = self.reference_line_regex.captures(line) {
-                        Line::Reference {
-                            left: if let Some(left_match) = captures.name("left") {
-                                Some(left_match.as_str())
-                            } else {
-                                None
-                            },
-                            is_optional: captures.name("optional").is_some(),
-                            name: captures.name("name").unwrap().as_str(),
-                            right: if let Some(left_match) = captures.name("right") {
-                                Some(left_match.as_str())
-                            } else {
-                                None
-                            },
-                        }
-                    } else {
-                        Line::Raw { value: line }
+                                result.push(ParametersLineToken::Parameter {
+                                    is_optional: capture.name("optional").is_some(),
+                                    name: capture
+                                        .name("name")
+                                        .ok_or(format!(
+                                            "Can not get parameter name from line {line}"
+                                        ))?
+                                        .as_str(),
+                                })
+                            }
+                            let right = &line[parameters_captures
+                                .last()
+                                .ok_or(format!(
+                                    "Can not get last parameter captures from line {line}"
+                                ))?
+                                .get_match()
+                                .end()..];
+                            result.push(ParametersLineToken::Raw { value: right });
+                            result
+                        },
                     }
-                })
-                .collect(),
+                } else if let Some(captures) = self.reference_line_regex.captures(line) {
+                    Line::Reference {
+                        left: if let Some(left_match) = captures.name("left") {
+                            Some(left_match.as_str())
+                        } else {
+                            None
+                        },
+                        is_optional: captures.name("optional").is_some(),
+                        name: captures
+                            .name("name")
+                            .ok_or(format!("Can not get parameter name from line {line}"))?
+                            .as_str(),
+                        right: if let Some(left_match) = captures.name("right") {
+                            Some(left_match.as_str())
+                        } else {
+                            None
+                        },
+                    }
+                } else {
+                    Line::Raw { value: line }
+                }
+            });
         }
+        Ok(Template {
+            lines: parsed_lines,
+        })
     }
 }
 
@@ -239,7 +248,7 @@ impl Template<'_> {
                                                         "Expected non-empty Vec of values for parameter \"{name}\""
                                                     ));
                                                 } else if values.len()
-                                                    == (value_index + 1).try_into().unwrap()
+                                                    == (value_index + 1).try_into().map_err(|error| format!("Can not convert value index plus one: {error}"))?
                                                 {
                                                     new_value_index = -1;
                                                 }
@@ -350,9 +359,9 @@ impl Template<'_> {
 
 #[test]
 fn test_parse() {
-    let parser = Parser::default();
+    let parser = Parser::from_syntax(&Syntax::default(), "param", "ref").unwrap();
     let template_text = "<tr>\n    <td><!-- (param)cell1 --></td><td><!-- (optional)(param)cell2 --></td>\n</tr>\n<!-- (ref)Ref1 -->";
-    let template = parser.parse(template_text);
+    let template = parser.parse(template_text).unwrap();
 
     assert_eq!(template.lines.len(), 4);
 
@@ -390,16 +399,17 @@ macro_rules! test {
     ($name:ident, $template_text:expr, $parameters:expr, $templates:expr, $correct_result:expr) => {
         #[test]
         fn $name() {
-            let parser = Parser::default();
+            let parser = Parser::from_syntax(&Syntax::default(), "param", "ref").unwrap();
             let templates: HashMap<&str, &str> = HashMap::from($templates);
             let mut parsed_templates = Templates::from([]);
             for (template_name, template_text) in templates {
-                let parsed = parser.parse(template_text);
+                let parsed = parser.parse(template_text).unwrap();
                 parsed_templates.insert(template_name, parsed);
             }
             assert_eq!(
                 parser
                     .parse($template_text)
+                    .unwrap()
                     .render($parameters, &parsed_templates,)
                     .unwrap(),
                 $correct_result
