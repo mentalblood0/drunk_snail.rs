@@ -7,12 +7,12 @@ Pure [rust](https://rust-lang.org/) implementation of template language original
 - Easy syntax
 - Separates logic and data
 
-## Why better then C / Python / Nim / Crystal implementations?
+## Why better than C / Python / Nim / Crystal implementations?
 
 - Compiled and statically typed yet memory safe
 - Small codebase
 - Allow for parser configuration
-- Significantly (~x2.5) faster then Crystal implementation
+- Significantly (~x2.5) faster than Crystal implementation
 
 ## Example
 
