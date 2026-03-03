@@ -1,6 +1,9 @@
 # 🌪️ drunk_snail
 
-Pure [rust](https://rust-lang.org/) implementation of template language originally presented [here](https://github.com/mentalblood0/drunk_snail)
+[![tests](https://github.com/mentalblood0/drunk_snail.rs/actions/workflows/tests.yml/badge.svg)](https://github.com/mentalblood0/drunk_snail.rs/actions/workflows/tests.yml)
+
+
+Rust implementation of template language originally presented [here](https://github.com/mentalblood0/drunk_snail)
 
 ## Why this language?
 
